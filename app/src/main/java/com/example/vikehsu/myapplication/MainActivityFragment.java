@@ -1,5 +1,6 @@
 package com.example.vikehsu.myapplication;
 
+import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -9,7 +10,10 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.GridView;
+import android.widget.Toast;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -24,6 +28,8 @@ public class MainActivityFragment extends Fragment {
 
     private ImageAdapter imageAdapter;
     private GridView gridView;
+    private JSONObject movieJson;
+
 
     public MainActivityFragment() {
     }
@@ -42,51 +48,73 @@ public class MainActivityFragment extends Fragment {
         FetchMovieTask movieTask = new FetchMovieTask();
         imageAdapter = new ImageAdapter(getActivity());
         gridView.setAdapter(imageAdapter);
+        //gridView.setOnClickListener();
         movieTask.execute();
 
         return rootView;
     }
 
-    public void UpdatePoster(String[] urls){
+    public void UpdatePoster(String results){
+        String[] urls;
+        urls=getMoviePostersFromJson(results);
         if (urls != null) {
             imageAdapter.updateAdapter(urls);
             gridView.setAdapter(imageAdapter);
+            gridView.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+                @Override
+                public void onItemClick(AdapterView<?> adapterView,View view, int position, long l){
+                    //String s = imageAdapter.getItem(position).toString();
+
+                    // In next phase id will be used.
+                    try {
+                        JSONArray movieResultArray = movieJson.getJSONArray("results");
+                        JSONObject currentMovie = movieResultArray.getJSONObject(position);
+                        String s = currentMovie.toString();
+                        Intent intent = new Intent(getActivity(),DetailActivity.class).putExtra(Intent.EXTRA_TEXT,s);
+                        startActivity(intent);
+                        //Toast.makeText(getActivity(),s,Toast.LENGTH_SHORT).show();
+                    }catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
         }
     }
+    private String[] getMoviePostersFromJson(String MovieJsonStr) {
 
-    public class FetchMovieTask extends AsyncTask<String, Void, String[]> {
-
-        private final String LOG_TAG = FetchMovieTask.class.getSimpleName();
-
-        private String[] getMovieDataFromJson(String MovieJsonStr)
-                throws JSONException {
-
-            final String POSTER_BASE_URL="http://image.tmdb.org/t/p/w185";
-            final String MOV_RESULTS="results";
-            final String MOV_POSTER_PATH = "poster_path";
-            final String MOV_ID = "id";
-            // In next phase id will be used.
-
-            JSONObject movieJson = new JSONObject(MovieJsonStr);
+        final String POSTER_BASE_URL="http://image.tmdb.org/t/p/w185";
+        final String MOV_RESULTS="results";
+        final String MOV_POSTER_PATH = "poster_path";
+        final String MOV_ID = "id";
+        // In next phase id will be used.
+        try {
+            movieJson = new JSONObject(MovieJsonStr);
             JSONArray movieResultArray = movieJson.getJSONArray(MOV_RESULTS);
-            String [] posterUrls=new String[movieResultArray.length()];
-            int [] movieIds=new int[movieResultArray.length()];
-            for(int i = 0; i < movieResultArray.length(); i++) {
+            String[] posterUrls = new String[movieResultArray.length()];
+            for (int i = 0; i < movieResultArray.length(); i++) {
                 String posterUrl;
-                int id;
                 JSONObject currentMovie = movieResultArray.getJSONObject(i);
                 posterUrl = POSTER_BASE_URL + currentMovie.getString(MOV_POSTER_PATH);
                 posterUrls[i] = posterUrl;
             }
             return posterUrls;
+        }catch (JSONException e) {
+            e.printStackTrace();
+            return null;
         }
+    }
+
+    public class FetchMovieTask extends AsyncTask<String, Void, String> {
+
+        private final String LOG_TAG = FetchMovieTask.class.getSimpleName();
+
 
         @Override
-        protected String[] doInBackground(String... params) {
+        protected String doInBackground(String... params) {
 
             HttpURLConnection urlConnection = null;
             BufferedReader reader = null;
-            String forecastJsonStr = null;
+            String movieJsonStr = null;
 
             try {
                 final String BASE_URL =
@@ -121,13 +149,11 @@ public class MainActivityFragment extends Fragment {
                 if (buffer.length() == 0) {
                     return null;
                 }
-                forecastJsonStr = buffer.toString();
+                movieJsonStr = buffer.toString();
 
-                Log.v(LOG_TAG, "Forecast string: " + forecastJsonStr);
+                Log.v(LOG_TAG, "Forecast string: " + movieJsonStr);
             } catch (IOException e) {
                 Log.e(LOG_TAG, "Error ", e);
-                // If the code didn't successfully get the weather data, there's no point in attemping
-                // to parse it.
                 return null;
             } finally {
                 if (urlConnection != null) {
@@ -141,19 +167,11 @@ public class MainActivityFragment extends Fragment {
                     }
                 }
             }
-
-            try {
-                return getMovieDataFromJson(forecastJsonStr);
-            } catch (JSONException e) {
-                Log.e(LOG_TAG, e.getMessage(), e);
-                e.printStackTrace();
-            }
-            // This will only happen if there was an error getting or parsing the forecast.
-            return null;
+            return movieJsonStr;
         }
 
         @Override
-        protected void onPostExecute(String[] result) {
+        protected void onPostExecute(String result) {
             UpdatePoster(result);
         }
     }
